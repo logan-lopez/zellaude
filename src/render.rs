@@ -1,3 +1,5 @@
+use crate::palette as pal;
+use crate::palette::{Accent, Color};
 use crate::state::{
     unix_now, unix_now_ms, Activity, ClickRegion, FlashMode, MenuAction, MenuClickRegion,
     NotifyMode, SessionInfo, SettingKey, State, ViewMode,
@@ -8,9 +10,7 @@ use zellij_tile::prelude::{InputMode, TabInfo};
 
 struct Style {
     symbol: &'static str,
-    r: u8,
-    g: u8,
-    b: u8,
+    color: Accent,
 }
 
 fn activity_priority(activity: &Activity) -> u8 {
@@ -29,8 +29,8 @@ fn activity_priority(activity: &Activity) -> u8 {
 
 fn activity_style(activity: &Activity) -> Style {
     match activity {
-        Activity::Init => Style { symbol: "◆", r: 180, g: 175, b: 195 },
-        Activity::Thinking => Style { symbol: "●", r: 180, g: 140, b: 255 },
+        Activity::Init => Style { symbol: "◆", color: pal::ACT_INIT },
+        Activity::Thinking => Style { symbol: "●", color: pal::ACT_THINKING },
         Activity::Tool(name) => {
             let symbol = match name.as_str() {
                 "Bash" => "⚡",
@@ -40,22 +40,24 @@ fn activity_style(activity: &Activity) -> Style {
                 "WebSearch" | "WebFetch" => "◈",
                 _ => "⚙",
             };
-            Style { symbol, r: 255, g: 170, b: 50 }
+            Style { symbol, color: pal::ACT_TOOL }
         }
-        Activity::Prompting => Style { symbol: "▶", r: 80, g: 200, b: 120 },
-        Activity::Waiting => Style { symbol: "⚠", r: 255, g: 60, b: 60 },
-        Activity::Notification => Style { symbol: "◇", r: 200, g: 200, b: 100 },
-        Activity::Done => Style { symbol: "✓", r: 80, g: 200, b: 120 },
-        Activity::AgentDone => Style { symbol: "✓", r: 80, g: 180, b: 100 },
-        Activity::Idle => Style { symbol: "○", r: 180, g: 175, b: 195 },
+        Activity::Prompting => Style { symbol: "▶", color: pal::ACT_PROMPTING },
+        Activity::Waiting => Style { symbol: "⚠", color: pal::ACT_WAITING },
+        Activity::Notification => Style { symbol: "◇", color: pal::ACT_NOTIFICATION },
+        Activity::Done => Style { symbol: "✓", color: pal::ACT_DONE },
+        Activity::AgentDone => Style { symbol: "✓", color: pal::ACT_AGENT_DONE },
+        Activity::Idle => Style { symbol: "○", color: pal::ACT_IDLE },
     }
 }
 
-fn fg(r: u8, g: u8, b: u8) -> String {
+/// SGR truecolor foreground.
+fn fgc((r, g, b): Color) -> String {
     format!("\x1b[38;2;{r};{g};{b}m")
 }
 
-fn bg(r: u8, g: u8, b: u8) -> String {
+/// SGR truecolor background.
+fn bgc((r, g, b): Color) -> String {
     format!("\x1b[48;2;{r};{g};{b}m")
 }
 
@@ -68,22 +70,19 @@ const BOLD: &str = "\x1b[1m";
 const ELAPSED_THRESHOLD: u64 = 30;
 const SEPARATOR: &str = "\u{e0b0}";
 
-type Color = (u8, u8, u8);
-const BAR_BG: Color = (30, 30, 46);
-const PREFIX_BG: Color = (60, 50, 80);
-const PREFIX_BG_SETTINGS: Color = (100, 70, 140);
-const TAB_BG_ACTIVE: Color = (140, 100, 200);
-const TAB_BG_INACTIVE: Color = (80, 75, 110);
-const FLASH_BG_BRIGHT: Color = (80, 80, 30);
+use pal::{
+    BAR_BG, FLASH_BG, PREFIX_BG, PREFIX_BG_SETTINGS, TAB_BG_ACTIVE, TAB_BG_INACTIVE,
+};
 
 /// Write a powerline arrow: fg=from_bg, bg=to_bg, then separator char.
 fn arrow(buf: &mut String, col: &mut usize, from: Color, to: Color) {
-    let _ = write!(
-        buf,
-        "{}{}{SEPARATOR}",
-        fg(from.0, from.1, from.2),
-        bg(to.0, to.1, to.2),
-    );
+    arrow_tinted(buf, col, from, to);
+}
+
+/// Same, but the glyph itself is drawn in `tint` rather than in `from`.
+/// Used to flag the active tab with a coral tick without tinting its surface.
+fn arrow_tinted(buf: &mut String, col: &mut usize, tint: Color, to: Color) {
+    let _ = write!(buf, "{}{}{SEPARATOR}", fgc(tint), bgc(to));
     *col += 1;
 }
 
@@ -99,20 +98,20 @@ fn format_elapsed(secs: u64) -> String {
 
 fn mode_style(mode: InputMode) -> (Color, &'static str) {
     match mode {
-        InputMode::Normal => ((80, 200, 120), "NORMAL"),
-        InputMode::Locked => ((255, 80, 80), "LOCKED"),
-        InputMode::Pane => ((80, 180, 255), "PANE"),
-        InputMode::Tab => ((180, 140, 255), "TAB"),
-        InputMode::Resize => ((255, 170, 50), "RESIZE"),
-        InputMode::Move => ((255, 170, 50), "MOVE"),
-        InputMode::Scroll => ((200, 200, 100), "SCROLL"),
-        InputMode::EnterSearch => ((200, 200, 100), "SEARCH"),
-        InputMode::Search => ((200, 200, 100), "SEARCH"),
-        InputMode::RenameTab => ((200, 200, 100), "RENAME"),
-        InputMode::RenamePane => ((200, 200, 100), "RENAME"),
-        InputMode::Session => ((180, 140, 255), "SESSION"),
-        InputMode::Prompt => ((80, 200, 120), "PROMPT"),
-        InputMode::Tmux => ((80, 200, 120), "TMUX"),
+        InputMode::Normal => (pal::MODE_NORMAL, "NORMAL"),
+        InputMode::Locked => (pal::MODE_LOCKED, "LOCKED"),
+        InputMode::Pane => (pal::MODE_PANE, "PANE"),
+        InputMode::Tab => (pal::MODE_TAB, "TAB"),
+        InputMode::Resize => (pal::MODE_RESIZE, "RESIZE"),
+        InputMode::Move => (pal::MODE_RESIZE, "MOVE"),
+        InputMode::Scroll => (pal::MODE_SCROLL, "SCROLL"),
+        InputMode::EnterSearch => (pal::MODE_SEARCH, "SEARCH"),
+        InputMode::Search => (pal::MODE_SEARCH, "SEARCH"),
+        InputMode::RenameTab => (pal::MODE_RENAME, "RENAME"),
+        InputMode::RenamePane => (pal::MODE_RENAME, "RENAME"),
+        InputMode::Session => (pal::MODE_SESSION, "SESSION"),
+        InputMode::Prompt => (pal::MODE_NORMAL, "PROMPT"),
+        InputMode::Tmux => (pal::MODE_NORMAL, "TMUX"),
     }
 }
 
@@ -126,7 +125,7 @@ pub fn render_status_bar(state: &mut State, _rows: usize, cols: usize) {
     //  \x1b[?7l   — disable auto-wrap (clip overflow instead of scroll)
     //  \x1b[?25l  — hide cursor
     buf.push_str("\x1b[H\x1b[?7l\x1b[?25l");
-    let bar_bg_str = bg(BAR_BG.0, BAR_BG.1, BAR_BG.2);
+    let bar_bg_str = bgc(BAR_BG);
 
     // Bail early if terminal is too narrow
     if cols < 5 {
@@ -136,10 +135,10 @@ pub fn render_status_bar(state: &mut State, _rows: usize, cols: usize) {
         return;
     }
 
-    let prefix_bg = if state.view_mode == ViewMode::Settings {
-        PREFIX_BG_SETTINGS
+    let (prefix_bg, prefix_fg) = if state.view_mode == ViewMode::Settings {
+        (PREFIX_BG_SETTINGS, pal::TEXT_ON_ACCENT)
     } else {
-        PREFIX_BG
+        (PREFIX_BG, pal::TEXT_PRIMARY)
     };
 
     // Build prefix: " Zellaude (session) MODE "
@@ -160,15 +159,15 @@ pub fn render_status_bar(state: &mut State, _rows: usize, cols: usize) {
         let _ = write!(
             buf,
             "{}{}{BOLD}{prefix_text}{RESET}",
-            bg(prefix_bg.0, prefix_bg.1, prefix_bg.2),
-            fg(255, 255, 255),
+            bgc(prefix_bg),
+            fgc(prefix_fg),
         );
         if show_mode {
             let _ = write!(
                 buf,
                 "{}{}{BOLD} {mode_text} {RESET}",
-                bg(mode_bg.0, mode_bg.1, mode_bg.2),
-                fg(30, 30, 46),
+                bgc(mode_bg),
+                fgc(pal::TEXT_ON_ACCENT),
             );
         }
         col = total_prefix_width;
@@ -177,8 +176,8 @@ pub fn render_status_bar(state: &mut State, _rows: usize, cols: usize) {
         let _ = write!(
             buf,
             "{}{}{BOLD}{prefix_text}{RESET}",
-            bg(prefix_bg.0, prefix_bg.1, prefix_bg.2),
-            fg(255, 255, 255),
+            bgc(prefix_bg),
+            fgc(prefix_fg),
         );
         col = prefix_width;
     } else {
@@ -188,8 +187,8 @@ pub fn render_status_bar(state: &mut State, _rows: usize, cols: usize) {
         let _ = write!(
             buf,
             "{}{}{BOLD}{short}{RESET}",
-            bg(prefix_bg.0, prefix_bg.1, prefix_bg.2),
-            fg(255, 255, 255),
+            bgc(prefix_bg),
+            fgc(prefix_fg),
         );
         col = display_width(&short);
     }
@@ -290,10 +289,14 @@ fn render_tabs(
     };
 
     let mut prev_bg = prefix_bg;
+    // Tracked explicitly rather than inferred from `prev_bg == prefix_bg`: under
+    // a neutral theme the prefix chip and an inactive tab share a surface colour,
+    // and comparing colours would collapse the gap between adjacent tabs.
+    let mut rendered_any = false;
 
     for (i, tab) in tabs.iter().enumerate() {
         // Stop if we'd overflow — need room for at least arrow + closing arrow
-        let arrows_needed = if prev_bg == prefix_bg { 1 } else { 2 };
+        let arrows_needed = if rendered_any { 2 } else { 1 };
         if *col + arrows_needed + 3 > cols {
             break;
         }
@@ -330,22 +333,24 @@ fn render_tabs(
 
         // Pick tab background color
         let tab_bg = if is_flash_bright {
-            FLASH_BG_BRIGHT
+            FLASH_BG
         } else if is_active {
             TAB_BG_ACTIVE
         } else {
             TAB_BG_INACTIVE
         };
 
-        // Arrow: close previous segment, then open this tab
-        if prev_bg == prefix_bg {
-            arrow(buf, col, prev_bg, tab_bg);
-        } else {
+        // Arrow: close previous segment, then open this tab. The opening arrow
+        // of the active tab is drawn in coral — a one-column "you are here" tick
+        // that leaves the tab's own surface neutral.
+        let open_from = if rendered_any { BAR_BG } else { prev_bg };
+        let open_tint = if is_active { pal::TAB_MARKER } else { open_from };
+        if rendered_any {
             arrow(buf, col, prev_bg, BAR_BG);
-            arrow(buf, col, BAR_BG, tab_bg);
         }
+        arrow_tinted(buf, col, open_tint, tab_bg);
 
-        let tab_bg_str = bg(tab_bg.0, tab_bg.1, tab_bg.2);
+        let tab_bg_str = bgc(tab_bg);
         let region_start = *col;
 
         if is_claude {
@@ -353,11 +358,11 @@ fn render_tabs(
             let style = activity_style(&s.activity);
 
             let (sym_fg, name_fg, name_bold) = if is_flash_bright {
-                (fg(255, 255, 80), fg(255, 255, 80), true)
+                (fgc(pal::TEXT_ON_ACCENT), fgc(pal::TEXT_ON_ACCENT), true)
             } else if is_active {
-                (fg(style.r, style.g, style.b), fg(255, 255, 255), true)
+                (fgc(style.color.pick(true)), fgc(pal::TEXT_PRIMARY), true)
             } else {
-                (fg(style.r, style.g, style.b), fg(120, 220, 220), false)
+                (fgc(style.color.pick(false)), fgc(pal::TEXT_SECONDARY), false)
             };
 
             // Leading space
@@ -378,14 +383,14 @@ fn render_tabs(
             // Elapsed suffix
             if let Some(ref es) = elapsed_strs[i] {
                 if *col + 1 + es.len() + 1 < cols {
-                    let _ = write!(buf, " {}{es}", fg(165, 160, 180));
+                    let _ = write!(buf, " {}{es}", fgc(pal::ELAPSED.pick(is_active)));
                     *col += 1 + es.len();
                 }
             }
 
             // Fullscreen indicator
             if tab.is_fullscreen_active && *col + 3 < cols {
-                let _ = write!(buf, " {}F{RESET}{tab_bg_str}", fg(255, 200, 60));
+                let _ = write!(buf, " {}F{RESET}{tab_bg_str}", fgc(pal::FULLSCREEN));
                 *col += 2;
             }
 
@@ -410,9 +415,9 @@ fn render_tabs(
         } else {
             // Non-Claude tab: dimmer, no symbol
             let name_fg = if is_active {
-                fg(220, 215, 230)
+                fgc(pal::TEXT_PRIMARY)
             } else {
-                fg(170, 165, 185)
+                fgc(pal::TEXT_TERTIARY)
             };
             let name_bold = is_active;
 
@@ -429,7 +434,7 @@ fn render_tabs(
 
             // Fullscreen indicator
             if tab.is_fullscreen_active && *col + 3 < cols {
-                let _ = write!(buf, " {}F{RESET}{tab_bg_str}", fg(255, 200, 60));
+                let _ = write!(buf, " {}F{RESET}{tab_bg_str}", fgc(pal::FULLSCREEN));
                 *col += 2;
             }
 
@@ -447,6 +452,7 @@ fn render_tabs(
         }
 
         prev_bg = tab_bg;
+        rendered_any = true;
     }
 
     // Arrow from last tab → bar background (only if we rendered any tabs)
@@ -457,17 +463,17 @@ fn render_tabs(
 
 fn notify_mode_label(mode: NotifyMode) -> (&'static str, &'static str, String, String) {
     match mode {
-        NotifyMode::Always => ("●", "Notify: always", fg(80, 200, 120), fg(255, 255, 255)),
-        NotifyMode::Unfocused => ("◐", "Notify: unfocused", fg(255, 200, 60), fg(255, 200, 60)),
-        NotifyMode::Never => ("○", "Notify: off", fg(100, 100, 100), fg(100, 100, 100)),
+        NotifyMode::Always => ("●", "Notify: always", fgc(pal::MENU_ON), fgc(pal::TEXT_PRIMARY)),
+        NotifyMode::Unfocused => ("◐", "Notify: unfocused", fgc(pal::MENU_PARTIAL), fgc(pal::MENU_PARTIAL)),
+        NotifyMode::Never => ("○", "Notify: off", fgc(pal::MENU_OFF), fgc(pal::MENU_OFF)),
     }
 }
 
 fn flash_mode_label(mode: FlashMode) -> (&'static str, &'static str, String, String) {
     match mode {
-        FlashMode::Persist => ("●", "Flash: persist", fg(80, 200, 120), fg(255, 255, 255)),
-        FlashMode::Once => ("◐", "Flash: brief", fg(255, 200, 60), fg(255, 200, 60)),
-        FlashMode::Off => ("○", "Flash: off", fg(100, 100, 100), fg(100, 100, 100)),
+        FlashMode::Persist => ("●", "Flash: persist", fgc(pal::MENU_ON), fgc(pal::TEXT_PRIMARY)),
+        FlashMode::Once => ("◐", "Flash: brief", fgc(pal::MENU_PARTIAL), fgc(pal::MENU_PARTIAL)),
+        FlashMode::Off => ("○", "Flash: off", fgc(pal::MENU_OFF), fgc(pal::MENU_OFF)),
     }
 }
 
@@ -529,9 +535,9 @@ fn render_settings_menu(state: &mut State, buf: &mut String, col: &mut usize) {
         *col += 2;
         let enabled = state.settings.elapsed_time;
         let (symbol, sym_color, label_color) = if enabled {
-            ("●", fg(80, 200, 120), fg(255, 255, 255))
+            ("●", fgc(pal::MENU_ON), fgc(pal::TEXT_PRIMARY))
         } else {
-            ("○", fg(100, 100, 100), fg(100, 100, 100))
+            ("○", fgc(pal::MENU_OFF), fgc(pal::MENU_OFF))
         };
         let label = if enabled { "Elapsed time: on" } else { "Elapsed time: off" };
         render_tristate(
@@ -546,9 +552,9 @@ fn render_settings_menu(state: &mut State, buf: &mut String, col: &mut usize) {
         *col += 2;
         let enabled = state.settings.mode_indicator;
         let (symbol, sym_color, label_color) = if enabled {
-            ("●", fg(80, 200, 120), fg(255, 255, 255))
+            ("●", fgc(pal::MENU_ON), fgc(pal::TEXT_PRIMARY))
         } else {
-            ("○", fg(100, 100, 100), fg(100, 100, 100))
+            ("○", fgc(pal::MENU_OFF), fgc(pal::MENU_OFF))
         };
         let label = if enabled { "Mode indicator: on" } else { "Mode indicator: off" };
         render_tristate(
@@ -561,7 +567,7 @@ fn render_settings_menu(state: &mut State, buf: &mut String, col: &mut usize) {
     let _ = write!(buf, "  ");
     *col += 2;
     let close_start = *col;
-    let _ = write!(buf, "{}×", fg(255, 60, 60));
+    let _ = write!(buf, "{}×", fgc(pal::MENU_CLOSE));
     *col += 1;
 
     state.menu_click_regions.push(MenuClickRegion {

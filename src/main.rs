@@ -1,5 +1,6 @@
 mod event_handler;
 mod installer;
+mod palette;
 mod render;
 mod state;
 mod tab_pane_map;
