@@ -101,6 +101,24 @@ impl FlashMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ThemePreference {
+    #[default]
+    Auto,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    pub fn cycle(self) -> Self {
+        match self {
+            Self::Auto => Self::Light,
+            Self::Light => Self::Dark,
+            Self::Dark => Self::Auto,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -108,6 +126,7 @@ pub struct Settings {
     pub flash: FlashMode,
     pub elapsed_time: bool,
     pub mode_indicator: bool,
+    pub theme: ThemePreference,
 }
 
 impl Default for Settings {
@@ -117,6 +136,7 @@ impl Default for Settings {
             flash: FlashMode::Once,
             elapsed_time: true,
             mode_indicator: true,
+            theme: ThemePreference::Auto,
         }
     }
 }
@@ -134,6 +154,7 @@ pub enum SettingKey {
     Flash,
     ElapsedTime,
     ModeIndicator,
+    Theme,
 }
 
 pub enum MenuAction {
@@ -166,4 +187,86 @@ pub struct State {
     pub menu_click_regions: Vec<MenuClickRegion>,
     pub config_loaded: bool,
     pub hooks_installed: bool,
+    pub detected_host_theme: Option<HostTerminalThemeMode>,
+    pub inferred_theme: Option<HostTerminalThemeMode>,
+}
+
+impl State {
+    pub fn resolved_theme(&self) -> HostTerminalThemeMode {
+        match self.settings.theme {
+            ThemePreference::Dark => HostTerminalThemeMode::Dark,
+            ThemePreference::Light => HostTerminalThemeMode::Light,
+            ThemePreference::Auto => {
+                if let Some(host) = self.detected_host_theme {
+                    host
+                } else if let Some(inferred) = self.inferred_theme {
+                    inferred
+                } else {
+                    HostTerminalThemeMode::Dark
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_settings_default_theme() {
+        let settings = Settings::default();
+        assert_eq!(settings.theme, ThemePreference::Auto);
+    }
+
+    #[test]
+    fn test_settings_deserialize_old_json() {
+        let json = r#"{"notifications":"Always","flash":"Once","elapsed_time":true,"mode_indicator":true}"#;
+        let settings: Settings = serde_json::from_str(json).expect("deserialize old settings");
+        assert_eq!(settings.theme, ThemePreference::Auto);
+    }
+
+    #[test]
+    fn test_settings_deserialize_new_json() {
+        let json = r#"{"notifications":"Always","flash":"Once","elapsed_time":true,"mode_indicator":true,"theme":"Light"}"#;
+        let settings: Settings = serde_json::from_str(json).expect("deserialize new settings");
+        assert_eq!(settings.theme, ThemePreference::Light);
+    }
+
+    #[test]
+    fn test_theme_preference_cycle() {
+        assert_eq!(ThemePreference::Auto.cycle(), ThemePreference::Light);
+        assert_eq!(ThemePreference::Light.cycle(), ThemePreference::Dark);
+        assert_eq!(ThemePreference::Dark.cycle(), ThemePreference::Auto);
+    }
+
+    #[test]
+    fn test_resolved_theme_precedence() {
+        let mut state = State::default();
+        // Precedence 4: neither signal -> Dark
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Dark);
+
+        // Precedence 3: infer from Zellij background when no host theme
+        state.inferred_theme = Some(HostTerminalThemeMode::Light);
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Light);
+
+        state.inferred_theme = Some(HostTerminalThemeMode::Dark);
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Dark);
+
+        // Precedence 2: host theme overrides inferred
+        state.inferred_theme = Some(HostTerminalThemeMode::Dark);
+        state.detected_host_theme = Some(HostTerminalThemeMode::Light);
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Light);
+
+        // Precedence 1: manual override beats host theme
+        state.settings.theme = ThemePreference::Dark;
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Dark);
+
+        state.settings.theme = ThemePreference::Light;
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Light);
+
+        // Switching back to Auto immediately respects the detected host theme
+        state.settings.theme = ThemePreference::Auto;
+        assert_eq!(state.resolved_theme(), HostTerminalThemeMode::Light);
+    }
 }

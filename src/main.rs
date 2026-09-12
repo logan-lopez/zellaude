@@ -32,6 +32,7 @@ impl ZellijPlugin for State {
             EventType::Mouse,
             EventType::RunCommandResult,
             EventType::PermissionRequestResult,
+            EventType::HostTerminalThemeChanged,
         ]);
         set_timeout(TIMER_INTERVAL);
 
@@ -65,6 +66,11 @@ impl ZellijPlugin for State {
                 if let Some(name) = mode_info.session_name {
                     self.zellij_session_name = Some(name);
                 }
+                self.inferred_theme = palette::infer_theme_from_style(&mode_info.style);
+                true
+            }
+            Event::HostTerminalThemeChanged(theme_mode) => {
+                self.detected_host_theme = Some(theme_mode);
                 true
             }
             Event::Mouse(Mouse::LeftClick(_, col)) => {
@@ -86,7 +92,7 @@ impl ZellijPlugin for State {
                         for region in &self.click_regions {
                             if col >= region.start_col && col < region.end_col {
                                 if region.is_waiting {
-                                    focus_terminal_pane(region.pane_id, false);
+                                    focus_terminal_pane(region.pane_id, false, false);
                                 } else {
                                     switch_tab_to(region.tab_index as u32 + 1);
                                 }
@@ -116,6 +122,10 @@ impl ZellijPlugin for State {
                                             state::SettingKey::ModeIndicator => {
                                                 self.settings.mode_indicator =
                                                     !self.settings.mode_indicator;
+                                            }
+                                            state::SettingKey::Theme => {
+                                                self.settings.theme =
+                                                    self.settings.theme.cycle();
                                             }
                                         }
                                         self.save_config();
@@ -199,7 +209,7 @@ impl ZellijPlugin for State {
                 // Notification click — focus the requested pane
                 if let Some(ref payload) = pipe_message.payload {
                     if let Ok(pane_id) = payload.trim().parse::<u32>() {
-                        focus_terminal_pane(pane_id, false);
+                        focus_terminal_pane(pane_id, false, false);
                     }
                 }
                 false
@@ -378,4 +388,10 @@ impl State {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod host_stubs {
+    #[no_mangle]
+    extern "C" fn host_run_plugin_command() {}
 }

@@ -14,6 +14,7 @@ A Zellij status bar plugin that replaces the default tab bar with Claude Code ac
 - **Permission flash** — sessions pulse bright yellow for 2 seconds when a permission request arrives
 - **Desktop notifications** — macOS notification on permission requests (rate-limited to once per 10s per tab), with click-to-focus support via [terminal-notifier](https://github.com/julienXX/terminal-notifier)
 - **Elapsed time** — shows how long a session has been in its current state (after 30s), making it easy to spot stuck sessions
+- **Runtime light/dark themes** — dual built-in Claude Dark and Claude Light palettes that switch automatically or on demand
 - **Multi-instance sync** — all Zellij tabs show a unified view of all sessions
 
 ### Activity symbols
@@ -42,12 +43,29 @@ Click the **Zellaude** prefix on the left side of the bar to open the settings m
 | Notifications | Always / Unfocused / Off | Always | Desktop notifications on permission requests. "Unfocused" only notifies when the requesting pane is on a different tab. |
 | Flash | Persist / Brief / Off | Brief | Yellow flash on permission requests. "Persist" keeps flashing until resolved, "Brief" flashes for 2 seconds. |
 | Elapsed time | On / Off | On | Show time since last activity (appears after 30s). |
+| Mode indicator | On / Off | On | Show Zellij input mode pill (NORMAL, LOCKED, PANE, etc.). |
+| Theme | Auto / Light / Dark | Auto | Status bar color scheme. "Auto" follows the host terminal; unsupported terminals fall back to the active Zellij theme background or Claude Dark. |
+
+### Themes and system appearance
+
+Zellaude includes dual built-in palettes (Claude Dark and Claude Light) and can switch dynamically at runtime:
+
+- **Auto** (default): Follows your host terminal's color scheme via Zellij 0.45.1+ host terminal theme detection (`DSR 997` / `CSI 2031`). If the terminal does not report its appearance, Zellaude infers light or dark mode from the active Zellij theme background, falling back to Dark if neither signal is available.
+- **Light**: Forces the Claude Light palette.
+- **Dark**: Forces the Claude Dark palette.
+
+Plugin theme selection is independent of whether Zellij's own UI themes are configured. To keep Zellij's panes and window frames synchronized alongside Zellaude when the system appearance changes, you can configure `theme_dark` and `theme_light` in your Zellij configuration (`~/.config/zellij/config.kdl`):
+
+```kdl
+theme_dark "claude-dark"
+theme_light "claude-light"
+```
 
 ## Install
 
 ### Prerequisites
 
-- [Zellij](https://zellij.dev)
+- [Zellij](https://zellij.dev) 0.45.1 or newer
 - [jq](https://jqlang.github.io/jq/) — used by the hook script at runtime
 
 ### Quick install
