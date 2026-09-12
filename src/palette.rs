@@ -62,7 +62,7 @@ pub const BASE16: Color = (128, 175, 222); // #80afde bright blue
 #[allow(dead_code)]
 pub const BASE17: Color = (202, 161, 217); // #caa1d9 bright purple
 
-// ── Role mapping ─────────────────────────────────────────────────────────────
+// ── Role mapping ────────────────────────────────────────────────────────────
 // Surfaces, darkest to lightest: bar ground → tab → active tab.
 // The bar is chrome, so it sits *below* the canvas the panes draw on — that
 // direction is deliberate and matches the app's sidebar.
@@ -75,14 +75,17 @@ pub const PREFIX_BG: Color = BASE01;
 pub const PREFIX_BG_SETTINGS: Color = BASE09;
 /// Inactive tab.
 pub const TAB_BG_INACTIVE: Color = BASE01;
-/// Active tab: neutral selection, not a coral wash (see rule 2 above).
-pub const TAB_BG_ACTIVE: Color = BASE02;
-/// Marks the active tab's leading separator, so position reads at a glance
-/// without tinting the tab surface.
+/// Active tab. Coral, matching the Zellij theme's selected ribbon: the fill is
+/// the marker, and everything drawn on it is `TEXT_ON_ACCENT`.
+pub const TAB_BG_ACTIVE: Color = BASE09;
+/// Leading separator of the active tab. Now the same coral as the tab itself,
+/// so it reads as the chip's left edge rather than a separate mark.
 pub const TAB_MARKER: Color = BASE09;
-/// Permission-request pulse. The one place coral is allowed to be a surface:
-/// it means something and it is asking for you.
-pub const FLASH_BG: Color = BASE09;
+/// Permission-request pulse. On an inactive tab the tab goes coral; on the
+/// active tab — already coral — it pulses the other way, to neutral.
+pub const FLASH_BG: Accent = Accent::new(BASE09, BASE02);
+/// Text on a flashing tab, paired with `FLASH_BG`.
+pub const TEXT_ON_FLASH: Accent = Accent::new(BASE00, BASE05);
 
 // Text
 pub const TEXT_PRIMARY: Color = BASE05;
@@ -99,14 +102,15 @@ pub const MENU_CLOSE: Color = BASE08;
 
 // Misc glyphs
 pub const FULLSCREEN: Color = BASE0A;
-pub const ELAPSED: Accent = Accent::new(BASE03, BASE04);
+pub const ELAPSED: Accent = Accent::new(BASE03, BASE00);
 
-/// A colour and its variant for the selected (`BASE02`) surface.
+/// A colour and its variant for the active (`BASE09`) tab surface.
 ///
-/// The theme does this itself: its `text_selected` / `table_cell_selected`
-/// blocks swap the `base0*` accents for the brighter `base1*` ones, because the
-/// selected surface is 24 points lighter and the base accents lose contrast on
-/// it. Every accent the bar draws over a tab follows the same rule.
+/// The active tab is an inverted coral chip. Every accent in the palette is
+/// light, so the best any of them manages on coral is 1.82:1 (bright yellow);
+/// the only values that clear are the dark greys. So `selected` is `BASE00`
+/// across the board — a selected tab has no colour channels, and the glyph
+/// carries its meaning by shape alone.
 #[derive(Clone, Copy)]
 pub struct Accent {
     pub base: Color,
@@ -118,11 +122,6 @@ impl Accent {
         Self { base, selected }
     }
 
-    /// Flat accent — same colour on both surfaces.
-    const fn flat(c: Color) -> Self {
-        Self { base: c, selected: c }
-    }
-
     pub const fn pick(&self, selected: bool) -> Color {
         if selected {
             self.selected
@@ -132,21 +131,22 @@ impl Accent {
     }
 }
 
-// Activity symbols. Contrast on both tab surfaces is checked in
-// `tests::accents_are_legible_on_both_tab_surfaces`.
-pub const ACT_INIT: Accent = Accent::flat(BASE04);
-pub const ACT_THINKING: Accent = Accent::new(BASE0E, BASE17);
-pub const ACT_TOOL: Accent = Accent::new(BASE09, BASE09_BRIGHT);
-pub const ACT_PROMPTING: Accent = Accent::new(BASE0B, BASE14);
-pub const ACT_WAITING: Accent = Accent::flat(BASE12);
-pub const ACT_NOTIFICATION: Accent = Accent::new(BASE0A, BASE13);
-pub const ACT_DONE: Accent = Accent::flat(BASE14);
-pub const ACT_AGENT_DONE: Accent = Accent::new(BASE0B, BASE14);
-/// Deliberately the quietest glyph in the bar; still lifted on the selected
-/// surface, where `BASE03` would fall to 2.9:1.
-pub const ACT_IDLE: Accent = Accent::new(BASE03, BASE04);
+// Activity symbols. Base values sit on `BASE01` (4.0–9.5:1); the selected
+// variant is `BASE00` on coral at 5.85:1.
+pub const ACT_INIT: Accent = Accent::new(BASE04, TEXT_ON_ACCENT);
+pub const ACT_THINKING: Accent = Accent::new(BASE0E, TEXT_ON_ACCENT);
+pub const ACT_TOOL: Accent = Accent::new(BASE09, TEXT_ON_ACCENT);
+pub const ACT_PROMPTING: Accent = Accent::new(BASE0B, TEXT_ON_ACCENT);
+pub const ACT_WAITING: Accent = Accent::new(BASE12, TEXT_ON_ACCENT);
+pub const ACT_NOTIFICATION: Accent = Accent::new(BASE0A, TEXT_ON_ACCENT);
+pub const ACT_DONE: Accent = Accent::new(BASE14, TEXT_ON_ACCENT);
+pub const ACT_AGENT_DONE: Accent = Accent::new(BASE0B, TEXT_ON_ACCENT);
+/// Deliberately the quietest glyph in the bar — `BASE03` at 4.03:1 on `BASE01`,
+/// the same under-target call as untracked files in the oh-my-zsh port.
+pub const ACT_IDLE: Accent = Accent::new(BASE03, TEXT_ON_ACCENT);
 
-// Input modes
+// Input modes. All drawn on `BAR_BG` / `PREFIX_BG`, where the base accents
+// run 5.40–7.97:1.
 pub const MODE_NORMAL: Color = BASE0B;
 pub const MODE_LOCKED: Color = BASE08;
 pub const MODE_PANE: Color = BASE0D;

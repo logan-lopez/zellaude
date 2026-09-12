@@ -333,7 +333,7 @@ fn render_tabs(
 
         // Pick tab background color
         let tab_bg = if is_flash_bright {
-            FLASH_BG
+            FLASH_BG.pick(is_active)
         } else if is_active {
             TAB_BG_ACTIVE
         } else {
@@ -358,7 +358,8 @@ fn render_tabs(
             let style = activity_style(&s.activity);
 
             let (sym_fg, name_fg, name_bold) = if is_flash_bright {
-                (fgc(pal::TEXT_ON_ACCENT), fgc(pal::TEXT_ON_ACCENT), true)
+                let on_flash = fgc(pal::TEXT_ON_FLASH.pick(is_active));
+                (on_flash.clone(), on_flash, true)
             } else if is_active {
                 (fgc(style.color.pick(true)), fgc(pal::TEXT_PRIMARY), true)
             } else {
