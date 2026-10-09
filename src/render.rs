@@ -140,13 +140,17 @@ pub fn render_status_bar(state: &mut State, _rows: usize, cols: usize) {
     };
 
     // Build prefix: " Zellaude (session) MODE "
+    // Fork: session name and mode are shown by zjstatus instead, so the prefix
+    // is reduced to a glyph that still opens the settings menu on click.
     let (mode_bg, mode_text) = mode_style(state.input_mode, pal);
-    let show_mode = state.settings.mode_indicator;
-    let session_part = match state.zellij_session_name.as_deref() {
-        Some(name) => format!(" ({name})"),
-        None => String::new(),
-    };
-    let prefix_text = format!(" Zellaude{session_part} ");
+    // let show_mode = state.settings.mode_indicator;
+    let show_mode = false;
+    // let session_part = match state.zellij_session_name.as_deref() {
+    //     Some(name) => format!(" ({name})"),
+    //     None => String::new(),
+    // };
+    // let prefix_text = format!(" Zellaude{session_part} ");
+    let prefix_text = String::from(" ✻ ");
     let prefix_width = display_width(&prefix_text);
     let mode_pill_width = if show_mode { 1 + mode_text.len() + 1 } else { 0 };
     let total_prefix_width = prefix_width + mode_pill_width;
@@ -282,7 +286,8 @@ fn render_tabs(
         .sum();
     let overhead = prefix_width + 2 * count + per_tab_overhead + total_elapsed_width;
     let max_name_len = if overhead < cols {
-        ((cols - overhead) / count).min(20)
+        // Fork: cap raised from 20.
+        ((cols - overhead) / count).min(40)
     } else {
         0
     };
