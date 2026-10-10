@@ -9,6 +9,14 @@
 [ -z "$ZELLIJ_SESSION_NAME" ] && exit 0
 [ -z "$ZELLIJ_PANE_ID" ] && exit 0
 
+# A pane keeps the ZELLIJ_SESSION_NAME it was started with. Once the session is
+# renamed, `zellij pipe` to the old name hangs forever instead of erroring, and
+# Claude Code's hook timeout only kills its own child, so this script and its
+# pipe would be orphaned. Bail out unless the session is still running.
+zellij list-sessions --no-formatting 2>/dev/null |
+  awk -v s="$ZELLIJ_SESSION_NAME" '$1 == s && !/EXITED/ { found = 1 } END { exit !found }' ||
+  exit 0
+
 # Capture send-time immediately so the plugin can order events
 # that race through parallel hook subprocesses.
 TS_MS=$(jq -nc 'now * 1000 | floor')
@@ -134,5 +142,11 @@ if [ "$HOOK_EVENT" = "PermissionRequest" ]; then
   fi
 fi
 
-# Send to plugin (hook is already async, no need to background)
-zellij pipe --name "zellaude" -- "$PAYLOAD"
+# Send to plugin (hook is already async, no need to background). The timeout
+# is a backstop for a session that goes away between the check above and here.
+if command -v timeout >/dev/null 2>&1; then
+  timeout 3 zellij pipe --name "zellaude" -- "$PAYLOAD"
+else
+  zellij pipe --name "zellaude" -- "$PAYLOAD"
+fi
+
